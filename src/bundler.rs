@@ -81,12 +81,8 @@ async fn replace_requires(origin: &str, requires: Vec<(String, String, String)>)
         let require_path = PathBuf::from(main_dir).join(&require);
         let contents = read_to_string(&require_path).await?;
 
-        println!("{matched}, {require}");
-
         // Check if the first and last characters are either ' or "
         if matched.starts_with('"') && matched.ends_with('"') || matched.starts_with('\'') && matched.ends_with('\'') {
-            println!("{}", "Test");
-
             // Check if the string ends with a semicolon
             let last_char_index = matched.len() - 1;
 
