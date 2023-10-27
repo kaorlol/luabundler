@@ -25,11 +25,13 @@ use regex::Regex;
 
 const REQUIRE_PATTERNS: &[&str] = &[
     // require("module.lua",...)
-    r#"require\s*\(\\*['"](.*?)\\*['"]\s*(?:,\s*(.*?))?\)"#,
+    r#"require\s*\(\\*['"](.*?)\\*['"]\s*(?:,\s*(.*?))?\)\s*;?"#,
 
     // require"module.lua"
-    r#"require\s*\\*['"](.*?)\\*['"]"#,
+    r#"require\s*\\*['"](.*?)\\*['"]\s*;?"#,
 ];
+
+const COMMENT_PATTERN: &str = r#"(--\[\[.*?\]\])|(--[^\n]*)|(\/\*.*?\*\/)|(\[\[.*?\]\])"#;
 
 // Recursively parses a file for require calls, and returns a vector of (require, args) tuples.
 #[async_recursion::async_recursion]
@@ -40,6 +42,16 @@ async fn parse_file(path: &str) -> Result<Vec<(String, String, String)>, Box<dyn
     for pattern in REQUIRE_PATTERNS {
         let regex = Regex::new(pattern)?;
         for cap in regex.captures_iter(&contents) {
+            // Check if there is a Lua comment preceding the require statement.
+            let comment_regex = Regex::new(COMMENT_PATTERN)?;
+            let start_index = cap.get(0).unwrap().start();
+            let preceding_text = &contents[..start_index];
+            
+            if comment_regex.is_match(preceding_text) {
+                println!("Skipping require statement in comment: {}", cap.get(0).unwrap().as_str());
+                continue; // Skip the require statement if it's within a comment.
+            }
+            
             let matched = cap.get(0).unwrap().as_str().to_string();
             let require = cap.get(1).unwrap().as_str().trim().to_string();
             let args = cap.get(2).map(|m| m.as_str().trim().to_string()).unwrap_or_default();
