@@ -48,7 +48,6 @@ async fn parse_file(path: &str) -> Result<Vec<(String, String, String)>, Box<dyn
             let preceding_text = &contents[..start_index];
             
             if comment_regex.is_match(preceding_text) {
-                println!("Skipping require statement in comment: {}", cap.get(0).unwrap().as_str());
                 continue; // Skip the require statement if it's within a comment.
             }
             
