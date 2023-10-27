@@ -8,7 +8,7 @@ use tokio::{
         read_to_string,
         File
     },
-    io::AsyncWriteExt,
+    io::copy,
     time::Instant
 };
 
@@ -100,7 +100,7 @@ fn process_code(buffer: PathBuf, minify: bool) {
     });
 }
 
-pub async fn bundle(main_path: &str, bundle_path: &str, _minify: bool) -> Result<(), Box<dyn Error>> {
+pub async fn bundle(main_path: &str, bundle_path: &str, _minify: bool, noprocess: bool) -> Result<(), Box<dyn Error>> {
     let start = Instant::now();
 
     let calls = parse_file(main_path).await?;
@@ -108,11 +108,15 @@ pub async fn bundle(main_path: &str, bundle_path: &str, _minify: bool) -> Result
 
     // Write the bundled code to the output file
     let mut file = File::create(bundle_path).await?;
-    file.write_all(bundled.as_bytes()).await?;
+    copy(&mut bundled.as_bytes(), &mut file).await?;
 
-    process_code(PathBuf::from(bundle_path), _minify);
+    println!("{}", format!("{} {} {}", "Bundled".blue(), main_path, format!("in {:?}", start.elapsed()).dimmed()));
 
-    println!("{} {} {}", "Bundled".blue(), main_path, format!("in {:?}", start.elapsed()).dimmed());
+    if !noprocess {
+        let start = Instant::now();
+        process_code(PathBuf::from(bundle_path), _minify);
+        println!("{}", format!("{} {} {}", "Processed".blue(), bundle_path, format!("in {:?}", start.elapsed()).dimmed()));
+    }
 
     Ok(())
 }
