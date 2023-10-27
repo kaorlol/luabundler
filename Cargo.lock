@@ -710,10 +710,8 @@ name = "luabundler"
 version = "0.1.0"
 dependencies = [
  "async-recursion",
- "clap",
  "colored",
  "darklua",
- "full_moon",
  "regex",
  "stacker",
  "tokio",
