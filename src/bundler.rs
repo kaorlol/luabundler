@@ -24,15 +24,11 @@ use stacker::maybe_grow;
 use regex::Regex;
 
 const REQUIRE_PATTERNS: &[&str] = &[
-    // Same as below, but with quotes
-    r#"/*['"]require\s*\(\\*['"](.*?)\\*['"]\s*(?:,\s*(.*?))?\)\s*;?/*['"]\s*;?"#,
-    r#"/*['"]require\s*\\*['"](.*?)\\*['"]\s*;?/*['"]\s*;?"#,
-
     // require("module.lua",...)
-    r#"require\s*\(\\*['"](.*?)\\*['"]\s*(?:,\s*(.*?))?\)\s*;?"#,
+    r#"['"]?require\s*\(\\*['"](.*?)\\*['"]\s*(?:,\s*(.*?))?\)\s*;?['"]?"#,
 
     // require"module.lua"
-    r#"require\s*\\*['"](.*?)\\*['"]\s*;?"#,
+    r#"['"]?require\s*\\*['"](.*?)\\*['"]\s*;?['"]?"#,
 ];
 
 const COMMENT_PATTERN: &str = r#"(--\[\[.*?\]\])|(--[^\n]*)|(\/\*.*?\*\/)|(\[\[.*?\]\])"#;
@@ -85,8 +81,12 @@ async fn replace_requires(origin: &str, requires: Vec<(String, String, String)>)
         let require_path = PathBuf::from(main_dir).join(&require);
         let contents = read_to_string(&require_path).await?;
 
+        println!("{matched}, {require}");
+
         // Check if the first and last characters are either ' or "
         if matched.starts_with('"') && matched.ends_with('"') || matched.starts_with('\'') && matched.ends_with('\'') {
+            println!("{}", "Test");
+
             // Check if the string ends with a semicolon
             let last_char_index = matched.len() - 1;
 
