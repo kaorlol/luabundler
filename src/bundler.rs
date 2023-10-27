@@ -24,6 +24,10 @@ use stacker::maybe_grow;
 use regex::Regex;
 
 const REQUIRE_PATTERNS: &[&str] = &[
+    // Same as below, but with quotes
+    r#"/*['"]require\s*\(\\*['"](.*?)\\*['"]\s*(?:,\s*(.*?))?\)\s*;?/*['"]\s*;?"#,
+    r#"/*['"]require\s*\\*['"](.*?)\\*['"]\s*;?/*['"]\s*;?"#,
+
     // require("module.lua",...)
     r#"require\s*\(\\*['"](.*?)\\*['"]\s*(?:,\s*(.*?))?\)\s*;?"#,
 
@@ -33,7 +37,7 @@ const REQUIRE_PATTERNS: &[&str] = &[
 
 const COMMENT_PATTERN: &str = r#"(--\[\[.*?\]\])|(--[^\n]*)|(\/\*.*?\*\/)|(\[\[.*?\]\])"#;
 
-// Recursively parses a file for require calls, and returns a vector of (require, args) tuples.
+// Recursively parses a file for require calls, and returns a vector of (require, args) tuples
 #[async_recursion::async_recursion]
 async fn parse_file(path: &str) -> Result<Vec<(String, String, String)>, Box<dyn Error>> {
     let contents = read_to_string(path).await?;
@@ -42,13 +46,13 @@ async fn parse_file(path: &str) -> Result<Vec<(String, String, String)>, Box<dyn
     for pattern in REQUIRE_PATTERNS {
         let regex = Regex::new(pattern)?;
         for cap in regex.captures_iter(&contents) {
-            // Check if there is a Lua comment preceding the require statement.
+            // Check if there is a Lua comment preceding the require statement
             let comment_regex = Regex::new(COMMENT_PATTERN)?;
             let start_index = cap.get(0).unwrap().start();
             let preceding_text = &contents[..start_index];
             
             if comment_regex.is_match(preceding_text) {
-                continue; // Skip the require statement if it's within a comment.
+                continue; // Skip the require statement if it's within a comment
             }
             
             let matched = cap.get(0).unwrap().as_str().to_string();
@@ -61,7 +65,7 @@ async fn parse_file(path: &str) -> Result<Vec<(String, String, String)>, Box<dyn
 
             calls.push((matched, require, args));
 
-            // Recursively parse the require file.
+            // Recursively parse the require file
             if require_path.exists() {
                 calls.append(&mut parse_file(require_path.to_str().unwrap()).await?);
             }
@@ -71,19 +75,44 @@ async fn parse_file(path: &str) -> Result<Vec<(String, String, String)>, Box<dyn
     Ok(calls)
 }
 
-// Replaces all require calls in a file with the contents of the file at the given path.
+// Replaces all require calls in a file with the contents of the file at the given path
 async fn replace_requires(origin: &str, requires: Vec<(String, String, String)>) -> Result<String, Box<dyn Error>> {
     let origin_buf = PathBuf::from(origin);
     let main_dir = origin_buf.parent().unwrap().to_str().unwrap();
     let mut replaced_contents = read_to_string(&origin_buf).await?;  // Initialize with the original content
 
-    for (matched, require, args) in requires {
+    for (mut matched, require, args) in requires {
         let require_path = PathBuf::from(main_dir).join(&require);
         let contents = read_to_string(&require_path).await?;
 
+        // Check if the require statement ends with a semicolon, and remove it if it does
+        let ends_with_semicolon = matched.ends_with(';');
+        if ends_with_semicolon {
+            matched.pop();
+        }
+
+        // Check if the first and last characters are either ' or "
+        if matched.starts_with('"') && matched.ends_with('"') || matched.starts_with('\'') && matched.ends_with('\'') {
+            // Check if the string ends with a semicolon
+            let last_char_index = matched.len() - 1;
+
+            // Replace the first and last characters with [[ and ]]
+            let mut replaced = String::from("[[");
+            replaced.push_str(&matched[1..matched.len() - 1]);
+            replaced.push_str("]]");
+
+            // Replace the matched string in the contents
+            replaced_contents = replaced_contents.replace(&matched, &replaced);
+
+            // Remove the first and last string in matched
+            matched.remove(0);
+            matched.remove(last_char_index - 1);
+        }
+
+        // Wrap the contents in a function call with the require arguments as parameters
         let mut replaced = format!("(function({})\n{}\nend)({});", args, contents, args);
 
-        // If the require call was multiline, indent the contents of the required file.
+        // If the require call was multiline, indent the contents of the required file
         if matched.contains("\n") {
             replaced = replaced.lines().map(|line| format!("    {}", line)).collect::<Vec<String>>().join("\n");
         }
