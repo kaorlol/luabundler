@@ -85,12 +85,6 @@ async fn replace_requires(origin: &str, requires: Vec<(String, String, String)>)
         let require_path = PathBuf::from(main_dir).join(&require);
         let contents = read_to_string(&require_path).await?;
 
-        // Check if the require statement ends with a semicolon, and remove it if it does
-        let ends_with_semicolon = matched.ends_with(';');
-        if ends_with_semicolon {
-            matched.pop();
-        }
-
         // Check if the first and last characters are either ' or "
         if matched.starts_with('"') && matched.ends_with('"') || matched.starts_with('\'') && matched.ends_with('\'') {
             // Check if the string ends with a semicolon
