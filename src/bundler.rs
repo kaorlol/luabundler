@@ -54,8 +54,6 @@ async fn remove_comments(contents: &str) -> Result<String, Box<dyn Error>> {
 async fn parse_file(path: &str) -> Result<Vec<(String, String, String, String)>, Box<dyn Error>> {
     let contents = remove_comments(&read_to_string(path).await?).await?;
 
-    println!("{contents}");
-
     let mut calls = Vec::new();
 
     for pattern in REQUIRE_PATTERNS {
