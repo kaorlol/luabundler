@@ -31,6 +31,7 @@ const REQUIRE_PATTERNS: &[&str] = &[
     r#"['"]?require\s*\\*['"](.*?)\\*['"]\s*;?['"]?"#,
 ];
 
+// Matches Lua comments: --, --[[ ]], and C-style comments: /* */
 const COMMENT_PATTERN: &str = r#"(--\[\[.*?\]\])|(--[^\n]*)|(\/\*.*?\*\/)|(\[\[.*?\]\])"#;
 
 // Recursively parses a file for require calls, and returns a vector of (require, args) tuples
