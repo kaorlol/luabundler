@@ -23,6 +23,8 @@ use colored::Colorize;
 use stacker::maybe_grow;
 use regex::Regex;
 
+// Regex on top. Just understand it tbh.
+
 const REQUIRE_PATTERNS: &[&str] = &[
     // require("module.lua",...) : 'require("module.lua",...)'
     r#"['"]?require\s*\(\\*['"](.*?)\\*['"]\s*(?:,\s*(.*?))?\)\s*;?['"]?"#,
@@ -33,6 +35,9 @@ const REQUIRE_PATTERNS: &[&str] = &[
 
 // Matches Lua comments: --, --[[ ]]
 const COMMENT_PATTERN: &str = r#"(--\[\[.*?\]\])|(--[^\n]*)|(\[\[.*?\]\])"#;
+
+// Matches strings: "string", 'string'
+const IN_STRING_PATTERN: &str = r#"^['"](.+)['"]$"#;
 
 // Recursively parses a file for require calls, and returns a vector of (require, args) tuples
 #[async_recursion::async_recursion]
@@ -83,21 +88,18 @@ async fn replace_requires(origin: &str, requires: Vec<(String, String, String)>)
         let contents = read_to_string(&require_path).await?;
 
         // Check if the first and last characters are either ' or "
-        if matched.starts_with('"') && matched.ends_with('"') || matched.starts_with('\'') && matched.ends_with('\'') {
-            // Check if the string ends with a semicolon
-            let last_char_index = matched.len() - 1;
-
+        let in_string_regex = Regex::new(IN_STRING_PATTERN)?;
+        if in_string_regex.is_match(&matched) {
             // Replace the first and last characters with [[ and ]]
             let mut replaced = String::from("[[");
             replaced.push_str(&matched[1..matched.len() - 1]);
             replaced.push_str("]]");
 
-            // Replace the matched string in the contents
             replaced_contents = replaced_contents.replace(&matched, &replaced);
 
             // Remove the first and last string in matched
             matched.remove(0);
-            matched.remove(last_char_index - 1);
+            matched.pop();
         }
 
         // Wrap the contents in a function call with the require arguments as parameters
@@ -137,7 +139,6 @@ fn process_code(buffer: PathBuf, minify: bool) {
 
 // Bundles the given file and writes the bundled code to the output file
 pub async fn bundle(main_path: &str, bundle_path: &str, _minify: bool, noprocess: bool) -> Result<(), Box<dyn Error>> {
-    // Time it because why not
     let start = Instant::now();
 
     // Parse the main file for require calls and replace them with the contents of the required files
