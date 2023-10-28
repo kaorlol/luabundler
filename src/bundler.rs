@@ -61,7 +61,7 @@ async fn parse_file(path: &str) -> Result<Vec<(String, String, String)>, Box<dyn
 
             calls.push((matched, require, args));
 
-            // Recursively parse the require file
+            // Recursively parse the require file and append the results to the vector
             if require_path.exists() {
                 calls.append(&mut parse_file(require_path.to_str().unwrap()).await?);
             }
@@ -114,7 +114,9 @@ async fn replace_requires(origin: &str, requires: Vec<(String, String, String)>)
     Ok(replaced_contents)
 }
 
+// Processes the code in the given buffer
 fn process_code(buffer: PathBuf, minify: bool) {
+    // Initialize the resources and parameters
     let resources = Resources::from_file_system();
     let generator_parameters = if minify {
         GeneratorParameters::default_dense()
@@ -122,17 +124,22 @@ fn process_code(buffer: PathBuf, minify: bool) {
         GeneratorParameters::default_readable()
     };
 
+    // Initialize the configuration and options
     let configuration = Configuration::empty().with_generator(generator_parameters);
     let process_options = Options::new(buffer.clone()).with_output(buffer).with_configuration(configuration);
 
+    // Process the code (using stacker to prevent stack overflow)
     maybe_grow(1024 * 1024, 32 * 1024 * 1024, || {
         darklua_core::process(&resources, process_options);
     });
 }
 
+// Bundles the given file and writes the bundled code to the output file
 pub async fn bundle(main_path: &str, bundle_path: &str, _minify: bool, noprocess: bool) -> Result<(), Box<dyn Error>> {
+    // Time it because why not
     let start = Instant::now();
 
+    // Parse the main file for require calls and replace them with the contents of the required files
     let calls = parse_file(main_path).await?;
     let bundled = replace_requires(main_path, calls).await?;
 
@@ -142,6 +149,7 @@ pub async fn bundle(main_path: &str, bundle_path: &str, _minify: bool, noprocess
 
     println!("{}", format!("{} {} {}", "Bundled".blue(), main_path, format!("in {:?}", start.elapsed()).dimmed()));
 
+    // Process the bundled code if the -n flag is not present
     if !noprocess {
         let start = Instant::now();
         process_code(PathBuf::from(bundle_path), _minify);
