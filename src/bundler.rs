@@ -21,9 +21,9 @@ use darklua_core::{
 
 use colored::Colorize;
 use stacker::maybe_grow;
-use regex::Regex;
 
 // Regex on top. Just understand it tbh.
+use regex::Regex;
 
 const REQUIRE_PATTERNS: &[&str] = &[
     // require("module.lua",...) : 'require("module.lua",...)'
