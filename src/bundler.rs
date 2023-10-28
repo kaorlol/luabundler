@@ -27,7 +27,7 @@ use regex::Regex;
 
 const REQUIRE_PATTERNS: &[&str] = &[
     // require("module.lua",...) : 'require("module.lua",...)'
-    r#"['"]?require\s*\(\\*['"](.*?)\\*['"]\s*(?:,\s*(.*?))?\)\s*;?['"]?\s*(\W*.*)"#,
+    r#"['"]?require\s*\(\\*['"](.*?)\\*['"]\s*(?:,\s*(.*?))?\)\s*;?\s*([.(].*)?['"]?"#,
 
     // require"module.lua" : 'require"module.lua"'
     r#"['"]?require\s*\\*['"](.*?)\\*['"]\s*;?['"]?"#,
@@ -56,11 +56,11 @@ async fn parse_file(path: &str) -> Result<Vec<(String, String, String, String)>,
             if comment_regex.is_match(preceding_text) {
                 continue; // Skip the require statement if it's within a comment
             }
-            
-            let matched = cap.get(0).unwrap().as_str().to_string();
+
+            let matched = cap.get(0).unwrap().as_str().trim().to_string();
             let require = cap.get(1).unwrap().as_str().trim().to_string();
             let args = cap.get(2).map(|m| m.as_str().trim().to_string()).unwrap_or_default();
-            let func_args = cap.get(3).unwrap().as_str().trim().to_string();
+            let func_args = cap.get(3).map_or(String::new(), |m| m.as_str().trim().to_string());
 
             let mut require_path = PathBuf::from(path);
             require_path.pop();
@@ -105,8 +105,6 @@ async fn replace_requires(origin: &str, requires: Vec<(String, String, String, S
 
         // Wrap the contents in a function call with the require arguments as parameters
         let mut replaced = format!("(function(...)\n{}\nend)({});", contents, args);
-
-        println!("{matched} {replaced}");
 
         if !func_args.is_empty() {
             replaced.pop(); // Remove the last semicolon
