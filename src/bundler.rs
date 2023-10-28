@@ -36,54 +36,26 @@ const REQUIRE_PATTERNS: &[&str] = &[
 // Matches strings: "string", 'string'
 const IN_STRING_PATTERN: &str = r#"^['"](.+)['"]$"#;
 
-// Chatgpted because im not doing allat :money_mouth: THANK YOU DADDY GPT :heart:
-async fn remove_all_comments(contents: &str) -> Result<String, Box<dyn Error>> {
-    let mut new_contents = String::new();
-    let mut in_string = false;
-    let mut in_multiline_comment = false;
-    let mut in_singleline_comment = false;
+// Matches comments: --, --[[ ]], --[=[ ]=]
+const IN_COMMENT_PATTERN: &str = r#"--\s*\[=*\[[\s\S]*?\]=*\]|--\s*.*?"#;
 
-    for (i, c) in contents.chars().enumerate() {
-        if in_string {
-            if c == '"' || c == '\'' {
-                in_string = false;
-            }
-        } else if in_multiline_comment {
-            if c == ']' {
-                if contents.chars().nth(i + 1).unwrap_or_default() == ']' {
-                    in_multiline_comment = false;
-                }
-            }
-        } else if in_singleline_comment {
-            if c == '\n' {
-                in_singleline_comment = false;
-            }
-        } else {
-            if c == '"' || c == '\'' {
-                in_string = true;
-            } else if c == '-' {
-                if contents.chars().nth(i + 1).unwrap_or_default() == '-' {
-                    in_singleline_comment = true;
-                } else if contents.chars().nth(i + 1).unwrap_or_default() == '[' {
-                    if contents.chars().nth(i + 2).unwrap_or_default() == '[' {
-                        in_multiline_comment = true;
-                    }
-                }
-            }
-        }
+async fn remove_comments(contents: &str) -> Result<String, Box<dyn Error>> {
+    // Create a regex instance for the comment pattern
+    let re = Regex::new(IN_COMMENT_PATTERN)?;
 
-        if !in_multiline_comment && !in_singleline_comment {
-            new_contents.push(c);
-        }
-    }
+    // Replace all matched comments with an empty string
+    let cleaned_contents = re.replace_all(contents, "").trim().to_string();
 
-    Ok(new_contents)
+    Ok(cleaned_contents.into())
 }
 
 // Recursively parses a file for require calls, and returns a vector of (require, args) tuples
 #[async_recursion::async_recursion]
 async fn parse_file(path: &str) -> Result<Vec<(String, String, String, String)>, Box<dyn Error>> {
-    let contents = remove_all_comments(read_to_string(path).await?.as_str()).await?;
+    let contents = remove_comments(&read_to_string(path).await?).await?;
+
+    println!("{contents}");
+
     let mut calls = Vec::new();
 
     for pattern in REQUIRE_PATTERNS {
@@ -114,7 +86,7 @@ async fn parse_file(path: &str) -> Result<Vec<(String, String, String, String)>,
 async fn replace_requires(origin: &str, requires: Vec<(String, String, String, String)>) -> Result<String, Box<dyn Error>> {
     let origin_buf = PathBuf::from(origin);
     let main_dir = origin_buf.parent().unwrap().to_str().unwrap();
-    let mut replaced_contents = read_to_string(&origin_buf).await?;  // Initialize with the original content
+    let mut replaced_contents = remove_comments(&read_to_string(&origin_buf).await?).await?;  // Initialize with the original content
 
     for (mut matched, require, args, func_args) in requires {
         let require_path = PathBuf::from(main_dir).join(&require);
