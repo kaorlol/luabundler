@@ -27,7 +27,7 @@ use regex::Regex;
 
 const REQUIRE_PATTERNS: &[&str] = &[
     // require("module.lua",...) : 'require("module.lua",...)'
-    r#"['"]?require\s*\(\\*['"](.*?)\\*['"]\s*(?:,\s*(.*?))?\)\s*;?['"]?"#,
+    r#"['"]?require\s*\(\\*['"](.*?)\\*['"]\s*(?:,\s*(.*?))?\)\s*;?['"]?\s*(\W*.*)"#,
 
     // require"module.lua" : 'require"module.lua"'
     r#"['"]?require\s*\\*['"](.*?)\\*['"]\s*;?['"]?"#,
@@ -41,7 +41,7 @@ const IN_STRING_PATTERN: &str = r#"^['"](.+)['"]$"#;
 
 // Recursively parses a file for require calls, and returns a vector of (require, args) tuples
 #[async_recursion::async_recursion]
-async fn parse_file(path: &str) -> Result<Vec<(String, String, String)>, Box<dyn Error>> {
+async fn parse_file(path: &str) -> Result<Vec<(String, String, String, String)>, Box<dyn Error>> {
     let contents = read_to_string(path).await?;
     let mut calls = Vec::new();
 
@@ -60,12 +60,13 @@ async fn parse_file(path: &str) -> Result<Vec<(String, String, String)>, Box<dyn
             let matched = cap.get(0).unwrap().as_str().to_string();
             let require = cap.get(1).unwrap().as_str().trim().to_string();
             let args = cap.get(2).map(|m| m.as_str().trim().to_string()).unwrap_or_default();
+            let func_args = cap.get(3).unwrap().as_str().trim().to_string();
 
             let mut require_path = PathBuf::from(path);
             require_path.pop();
             require_path.push(&require);
 
-            calls.push((matched, require, args));
+            calls.push((matched, require, args, func_args));
 
             // Recursively parse the require file and append the results to the vector
             if require_path.exists() {
@@ -78,12 +79,12 @@ async fn parse_file(path: &str) -> Result<Vec<(String, String, String)>, Box<dyn
 }
 
 // Replaces all require calls in a file with the contents of the file at the given path
-async fn replace_requires(origin: &str, requires: Vec<(String, String, String)>) -> Result<String, Box<dyn Error>> {
+async fn replace_requires(origin: &str, requires: Vec<(String, String, String, String)>) -> Result<String, Box<dyn Error>> {
     let origin_buf = PathBuf::from(origin);
     let main_dir = origin_buf.parent().unwrap().to_str().unwrap();
     let mut replaced_contents = read_to_string(&origin_buf).await?;  // Initialize with the original content
 
-    for (mut matched, require, args) in requires {
+    for (mut matched, require, args, func_args) in requires {
         let require_path = PathBuf::from(main_dir).join(&require);
         let contents = read_to_string(&require_path).await?;
 
@@ -104,6 +105,13 @@ async fn replace_requires(origin: &str, requires: Vec<(String, String, String)>)
 
         // Wrap the contents in a function call with the require arguments as parameters
         let mut replaced = format!("(function(...)\n{}\nend)({});", contents, args);
+
+        println!("{matched} {replaced}");
+
+        if !func_args.is_empty() {
+            replaced.pop(); // Remove the last semicolon
+            replaced.push_str(&func_args);
+        }
 
         // If the require call was multiline, indent the contents of the required file
         if matched.contains("\n") {
