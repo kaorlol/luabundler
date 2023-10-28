@@ -37,14 +37,22 @@ const REQUIRE_PATTERNS: &[&str] = &[
 const IN_STRING_PATTERN: &str = r#"^['"](.+)['"]$"#;
 
 // Matches comments: --, --[[ ]], --[=[ ]=]
-const IN_COMMENT_PATTERN: &str = r#"--\s*\[=*\[[\s\S]*?\]=*\]|--\s*.*?"#;
+const IN_COMMENT_PATTERN: &str = r#"--\[=*\[[\s\S]*?\]=*\]|['"]*--\s*.*['"]?"#;
 
 async fn remove_comments(contents: &str) -> Result<String, Box<dyn Error>> {
     // Create a regex instance for the comment pattern
-    let re = Regex::new(IN_COMMENT_PATTERN)?;
+    let re: Regex = Regex::new(IN_COMMENT_PATTERN)?;
+    let mut cleaned_contents = String::from(contents);
 
     // Replace all matched comments with an empty string
-    let cleaned_contents = re.replace_all(contents, "").trim().to_string();
+    for cap in re.captures_iter(contents) {
+        // check if the comment is in a string, if so, don't remove it
+        let matched = cap.get(0).unwrap().as_str().trim().to_string();
+        let in_string_regex = Regex::new(IN_STRING_PATTERN)?;
+        if !in_string_regex.is_match(&matched) {
+            cleaned_contents = cleaned_contents.replace(&matched, "");
+        }
+    }
 
     Ok(cleaned_contents.into())
 }
@@ -53,6 +61,8 @@ async fn remove_comments(contents: &str) -> Result<String, Box<dyn Error>> {
 #[async_recursion::async_recursion]
 async fn parse_file(path: &str) -> Result<Vec<(String, String, String, String)>, Box<dyn Error>> {
     let contents = remove_comments(&read_to_string(path).await?).await?;
+
+    println!("{contents}");
 
     let mut calls = Vec::new();
 
