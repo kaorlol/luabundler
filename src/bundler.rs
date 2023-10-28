@@ -33,30 +33,62 @@ const REQUIRE_PATTERNS: &[&str] = &[
     r#"['"]?require\s*\\*['"](.*?)\\*['"]\s*;?['"]?"#,
 ];
 
-// Matches Lua comments: --, --[[ ]]
-const COMMENT_PATTERN: &str = r#"(--\[\[.*?\]\])|(--[^\n]*)|(\[\[.*?\]\])"#;
-
 // Matches strings: "string", 'string'
 const IN_STRING_PATTERN: &str = r#"^['"](.+)['"]$"#;
+
+// Chatgpted because im not doing allat :money_mouth: THANK YOU DADDY GPT :heart:
+async fn remove_all_comments(contents: &str) -> Result<String, Box<dyn Error>> {
+    let mut new_contents = String::new();
+    let mut in_string = false;
+    let mut in_multiline_comment = false;
+    let mut in_singleline_comment = false;
+
+    for (i, c) in contents.chars().enumerate() {
+        if in_string {
+            if c == '"' || c == '\'' {
+                in_string = false;
+            }
+        } else if in_multiline_comment {
+            if c == ']' {
+                if contents.chars().nth(i + 1).unwrap_or_default() == ']' {
+                    in_multiline_comment = false;
+                }
+            }
+        } else if in_singleline_comment {
+            if c == '\n' {
+                in_singleline_comment = false;
+            }
+        } else {
+            if c == '"' || c == '\'' {
+                in_string = true;
+            } else if c == '-' {
+                if contents.chars().nth(i + 1).unwrap_or_default() == '-' {
+                    in_singleline_comment = true;
+                } else if contents.chars().nth(i + 1).unwrap_or_default() == '[' {
+                    if contents.chars().nth(i + 2).unwrap_or_default() == '[' {
+                        in_multiline_comment = true;
+                    }
+                }
+            }
+        }
+
+        if !in_multiline_comment && !in_singleline_comment {
+            new_contents.push(c);
+        }
+    }
+
+    Ok(new_contents)
+}
 
 // Recursively parses a file for require calls, and returns a vector of (require, args) tuples
 #[async_recursion::async_recursion]
 async fn parse_file(path: &str) -> Result<Vec<(String, String, String, String)>, Box<dyn Error>> {
-    let contents = read_to_string(path).await?;
+    let contents = remove_all_comments(read_to_string(path).await?.as_str()).await?;
     let mut calls = Vec::new();
 
     for pattern in REQUIRE_PATTERNS {
         let regex = Regex::new(pattern)?;
         for cap in regex.captures_iter(&contents) {
-            // Check if there is a Lua comment preceding the require statement
-            let comment_regex = Regex::new(COMMENT_PATTERN)?;
-            let start_index = cap.get(0).unwrap().start();
-            let preceding_text = &contents[..start_index];
-            
-            if comment_regex.is_match(preceding_text) {
-                continue; // Skip the require statement if it's within a comment
-            }
-
             let matched = cap.get(0).unwrap().as_str().trim().to_string();
             let require = cap.get(1).unwrap().as_str().trim().to_string();
             let args = cap.get(2).map(|m| m.as_str().trim().to_string()).unwrap_or_default();
