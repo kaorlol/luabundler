@@ -103,7 +103,7 @@ async fn replace_requires(origin: &str, requires: Vec<(String, String, String)>)
         }
 
         // Wrap the contents in a function call with the require arguments as parameters
-        let mut replaced = format!("(function({})\n{}\nend)({});", args, contents, args);
+        let mut replaced = format!("(function(...)\n{}\nend)({});", contents, args);
 
         // If the require call was multiline, indent the contents of the required file
         if matched.contains("\n") {
