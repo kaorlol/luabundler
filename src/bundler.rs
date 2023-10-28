@@ -24,15 +24,15 @@ use stacker::maybe_grow;
 use regex::Regex;
 
 const REQUIRE_PATTERNS: &[&str] = &[
-    // require("module.lua",...)
+    // require("module.lua",...) : 'require("module.lua",...)'
     r#"['"]?require\s*\(\\*['"](.*?)\\*['"]\s*(?:,\s*(.*?))?\)\s*;?['"]?"#,
 
-    // require"module.lua"
+    // require"module.lua" : 'require"module.lua"'
     r#"['"]?require\s*\\*['"](.*?)\\*['"]\s*;?['"]?"#,
 ];
 
-// Matches Lua comments: --, --[[ ]], and C-style comments: /* */
-const COMMENT_PATTERN: &str = r#"(--\[\[.*?\]\])|(--[^\n]*)|(\/\*.*?\*\/)|(\[\[.*?\]\])"#;
+// Matches Lua comments: --, --[[ ]]
+const COMMENT_PATTERN: &str = r#"(--\[\[.*?\]\])|(--[^\n]*)|(\[\[.*?\]\])"#;
 
 // Recursively parses a file for require calls, and returns a vector of (require, args) tuples
 #[async_recursion::async_recursion]
