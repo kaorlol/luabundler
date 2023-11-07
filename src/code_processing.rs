@@ -51,7 +51,7 @@ async fn replace_requires(origin: &str, requires: Vec<(String, String, String, S
         }
 
         // Wrap the contents in a function call with the require arguments as parameters
-        let mut replaced = format!("(function(...)\n{}\nend)({});", contents, args);
+        let mut replaced = format!("(function(...)\n\t{}\nend)({});", contents, args);
 
         if !func_args.is_empty() {
             // Remove the last semicolon and add func_args
